@@ -1,1 +1,267 @@
+%% Example solution - Interfacing the Neuromuscular System SS23 - Practical 1 
 
+clc, clearvars, close all
+
+load('EMG_P1_file1.mat')                 % Load file
+SIG = cellfun(@(x) x*(5/2^16/150*1000),SIG,'un',0);%obtaining the amplitude in mV
+
+EMG1=vertcat(SIG{:});                    % Concatenates the EMG signal in array with channels as rows
+SIG1 = SIG;
+discardChannelsVec1 = discardChannelsVec;
+
+load('EMG_P1_file2.mat')
+SIG = cellfun(@(x) x*(5/2^16/150*1000),SIG,'un',0);%obtaining the amplitude in mV
+
+EMG2=vertcat(SIG{:});
+SIG2 = SIG;
+discardChannelsVec2 = discardChannelsVec;
+
+clear EMG SIG discardChannelsVec;
+
+%% Q1 - Plotting channels
+
+% to make the plots look nicer: https://anneurai.net/2016/06/13/prettier-plots-in-matlab/
+
+% general graphics, this will apply to any figure you open
+% (groot is the default figure object).
+set(groot, ...
+'DefaultFigureColor', 'w', ...
+'DefaultAxesLineWidth', 0.5, ...
+'DefaultAxesXColor', 'k', ...
+'DefaultAxesYColor', 'k', ...
+'DefaultAxesFontUnits', 'points', ...
+'DefaultAxesFontSize', 11, ...
+'DefaultAxesFontName', 'Helvetica', ...
+'DefaultLineLineWidth', 1, ...
+'DefaultTextFontUnits', 'Points', ...
+'DefaultTextFontSize', 11, ...
+'DefaultTextFontName', 'Helvetica', ...
+'DefaultAxesBox', 'off', ...
+'DefaultAxesTickLength', [0.02 0.025]);
+
+
+ch_plot1 = SIG1(1:10,6); %random selection of 10 channels
+ch_plot1 = cell2mat(ch_plot1);
+
+ch_plot2 = SIG2(1:10,6); %random selection of 10 channels
+ch_plot2 = cell2mat(ch_plot2);
+
+time1=linspace(0,size(ch_plot1,2)/fsamp,size(ch_plot1,2)); %create time vector for plotting
+time2=linspace(0,size(ch_plot2,2)/fsamp,size(ch_plot2,2)); %create time vector for plotting
+
+figure(1);
+
+% Tile 1
+subplot(2, 1, 1);
+for i = 1:size(ch_plot1, 1)
+    plot(time1, ch_plot1(i, :) + i * 0.5);
+    hold on
+end
+xlabel('Time (s)')
+ylabel('Channel')
+
+% Tile 2
+subplot(2, 1, 2);
+for i = 1:size(ch_plot2, 1)
+    plot(time2, ch_plot2(i, :) + i * 0.5);
+    hold on
+end
+xlabel('Time (s)')
+ylabel('Channel')
+
+
+
+
+
+%% Q1 - Power spectrum
+
+figure(2)
+pspectrum(mean(EMG1,1,'omitnan'),fsamp) %plotting the power spectrum of the mean of the channels for file 1
+xlim([0,1])
+
+figure(3)
+pspectrum(mean(EMG2,1,'omitnan'),fsamp) %plotting the power spectrum of the mean of the channels for file 2
+xlim([0,1])
+
+
+%% Q1 - Filtering
+
+%using SIG variable
+
+%file 1
+SIG_filt1 = filtering_SIG(SIG1,fsamp); %check end of the file for the function code
+EMG_filt1 = vertcat(SIG_filt1{:}); %converting to matrix to make it easier to use pspectrum
+
+%file 2
+SIG_filt2 = filtering_SIG(SIG2,fsamp);
+EMG_filt2 = vertcat(SIG_filt2{:}); %converting to matrix to make it easier to use pspectrum
+
+% or using EMG variable
+wo = 50/(2048/2);
+bw = wo/32; %35 is the quality factor - check here the documentation about it https://de.mathworks.com/help/dsp/ref/fdesign.notch.html
+[b,a] = iirnotch(wo,bw); %50Hz filter
+[d,c] = butter(2,[20 500]/(fsamp/2),'bandpass');
+
+EMG2_filt = filtfilt(b, a, EMG2'); %filtfilt filter in the first dimension (rows) of a matrix
+EMG2_filt = filtfilt(d, c, EMG2_filt);
+
+%plot examples for file 2
+figure(4)
+pspectrum(mean(EMG_filt2,1,'omitnan'),2048) %plotting the power spectrum of the mean of the channels for file 2
+
+figure(5)
+pspectrum(mean(EMG2_filt,2,'omitnan'),2048)
+
+%% Q2 - RMS
+
+window_length=[0.050, 0.1, 0.2, 0.3, 0.4];                                 %Window lengths in s
+
+rms_datacell1 = calc_rms(EMG_filt1,window_length,fsamp);
+
+rms_datacell2 = calc_rms(EMG_filt2,window_length,fsamp);
+
+%Plotting Channel 5 as example 
+
+%file 1
+figure(6), hold on
+for i=1:5                                                                  %create 6 subplots of all window lengths in a loop
+    subplot(3,2,i)
+    plot(rms_datacell1{5,i}+(i-1)*300)
+    title(['Window Length=' num2str(window_length(i))])
+    xlabel('Sample')
+    ylabel('uV')
+end
+
+%file 2
+figure(7), hold on
+for i=1:5                                                                  %create 6 subplots of all window lengths in a loop
+    subplot(3,2,i)
+    plot(rms_datacell2{5,i}+(i-1)*300)
+    title(['Window Length=' num2str(window_length(i)) ' s']);
+    xlabel('Sample')
+    ylabel('uV')
+end
+
+%% Q2 - Average RMS-signals of 50 ms and 200 ms over all channels for file 2
+
+RMS_50ms=vertcat(rms_datacell2{:,1});                                   % Extract the 200ms windowed signal from the cell array
+for i=1:size(RMS_50ms,2)
+    avg_50ms(i)=sum(RMS_50ms(:,i))/64;                                      % Average all Channels
+end
+
+RMS_200ms=vertcat(rms_datacell2{:,3});                                      % Extract the 200ms windowed signal from the cell array
+for i=1:size(RMS_200ms,2)
+    avg_200ms(i)=sum(RMS_200ms(:,i))/64;                                    % Average all Channels
+end
+
+t1 = linspace(0,SIGlength,length(avg_50ms));                                %time vector according to the length of the signal in seconds
+t2 = linspace(0,SIGlength,length(avg_200ms));
+
+figure(8)
+plot(t1,avg_50ms)
+hold on
+plot(t2,avg_200ms)
+
+%% Q3 - discard channels (you can create a function as it was done previously)
+
+%file 1 - SIG 1
+
+l = size(SIG1{1,2},2);  %obtaining the length in samples for one channel
+
+for EMGrow = 1:size(SIG1,1) %loop through the cell array SIG
+    for EMGcolumn = 1:size(SIG1,2)
+        if discardChannelsVec1(EMGrow,EMGcolumn) == 1 %channels to be discarded
+            SIG_filt1{EMGrow,EMGcolumn}(:) = NaN(1,l); %create a NaN vector with 'l' length
+        end
+    end
+end
+
+%file 2 - SIG2
+
+l = size(SIG2{1,2},2);  %obtaining the length in samples for one channel
+
+for EMGrow = 1:size(SIG2,1) %loop through the cell array SIG
+    for EMGcolumn = 1:size(SIG2,2)
+        if discardChannelsVec2(EMGrow,EMGcolumn) == 1 %channels to be discarded
+            SIG_filt2{EMGrow,EMGcolumn}(:) = NaN(1,l); %create a NaN vector with 'l' length
+        end
+    end
+end
+
+
+%% Q3
+
+%file 1 - SIG1 spatial map
+
+for EMGrow = 1:size(SIG1,1)
+    for EMGcolumn = 1:size(SIG1,2)
+        rms_SIG(EMGrow,EMGcolumn) = rms(SIG_filt1{EMGrow,EMGcolumn}(:)); %calculating rms for each channel for the whole duration of signal
+    end
+end
+
+figure(9)
+imagesc(rms_SIG);
+colorbar
+
+%file 2
+S = cellfun(@(x) rms(x),SIG_filt2);%mV
+figure(10)
+imagesc(S)
+colorbar
+
+
+%% Q4
+
+% file1 contains the data of an injured person, this can be seen from the EMG channels, RMS and spatial map
+% we can discuss more in class
+
+%% Functions
+
+function SIG_filt  = filtering_SIG(SIG,fsamp)
+% SIG_filt Local function that filters the signal
+
+    wo = 50/(2048/2);
+    bw = wo/32; %35 is the quality factor - check here the documentation about it https://de.mathworks.com/help/dsp/ref/fdesign.notch.html
+    [b,a] = iirnotch(wo,bw); %50Hz filter
+    [d,c] = butter(2,[20 500]/(fsamp/2),'bandpass');
+    
+    for EMGrow = 1:size(SIG,1) %loop through the cell array SIG
+        for EMGcolumn = 1:size(SIG,2)
+            if ~isempty(SIG{EMGrow,EMGcolumn})
+                SIG_filt{EMGrow,EMGcolumn}(:) = filtfilt(d, c, SIG{EMGrow,EMGcolumn});
+                SIG_filt{EMGrow,EMGcolumn}(:) = filtfilt(b, a, SIG_filt{EMGrow,EMGcolumn});
+            end
+        end
+    end
+
+end
+
+function rms_datacell = calc_rms(EMG,window_length,fsamp)
+
+rms_datacell=cell(64,6);                                                   %create cell array with dimension 64*6
+
+for j=1:length(window_length)                                              %loop through window lengths
+    samples=round(fsamp*window_length(j));                                 %calculates the number of samples that correspond to each window length
+
+    for k=1:64                                                             %loop through channels
+
+        rms_data=[];
+        ind_count=1;
+
+        for i=1:samples:size(EMG,2)                                        %third loop through the signal
+
+            if i + samples > size(EMG,2)
+                break
+            end
+
+            rms_data(ind_count)=rms(EMG(k,i:i+samples));                   %calculate the rms for each data point
+            ind_count=ind_count+1;
+
+        end
+
+        rms_datacell{k,j}=rms_data;                                        %write RMS signal of Window length j and Channel k in corresponding cell array spot
+
+    end
+
+end
+end
