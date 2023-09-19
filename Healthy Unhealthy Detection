@@ -1,5 +1,3 @@
-%% Example solution - Interfacing the Neuromuscular System SS23 - Practical 1 
-
 clc, clearvars, close all
 
 load('EMG_P1_file1.mat')                 % Load file
